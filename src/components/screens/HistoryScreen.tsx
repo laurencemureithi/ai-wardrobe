@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { Clock, AlertCircle, RefreshCw } from 'lucide-react';
+import { Clock, AlertCircle } from 'lucide-react';
 import { fetchWearEvents } from '@/lib/outfitService';
 import type { WearEvent, Outfit } from '@/lib/types';
 import { Spinner } from '@/components/ui/Spinner';

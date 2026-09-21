@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Bookmark, RefreshCw, Check, ThumbsDown, ArrowLeft } from 'lucide-react';
+import { Bookmark, RefreshCw, Check, ThumbsDown, ArrowLeft, Wand2 } from 'lucide-react';
 import type { ClothingItem, OutfitSlot, Recommendation } from '@/lib/types';
 import { FullBodyOutfit } from '@/components/ui/FullBodyOutfit';
 import { ItemSelector } from '@/components/ui/ItemSelector';
@@ -12,9 +12,10 @@ interface OutfitDetailProps {
   recommendation: Recommendation;
   weather?: { temperature: number; rain: boolean; condition: string } | null;
   onClose: () => void;
+  onTryInTwin?: (rec: Recommendation) => void;
 }
 
-export function OutfitDetail({ recommendation, weather, onClose }: OutfitDetailProps) {
+export function OutfitDetail({ recommendation, weather, onClose, onTryInTwin }: OutfitDetailProps) {
   const [outfitItems, setOutfitItems] = useState(recommendation.items);
   const [allItems, setAllItems] = useState<ClothingItem[]>([]);
   const [selectedSlot, setSelectedSlot] = useState<OutfitSlot | null>(null);
@@ -173,27 +174,40 @@ export function OutfitDetail({ recommendation, weather, onClose }: OutfitDetailP
 
       {/* Bottom actions */}
       <div className="border-t border-ink-100 bg-ink-50/90 px-5 py-4 safe-bottom backdrop-blur-lg">
-        <div className="flex items-center gap-2">
+        <div className="flex flex-col sm:flex-row items-center gap-2">
+          {onTryInTwin && (
+            <button
+              onClick={() => {
+                onTryInTwin({ ...recommendation, items: outfitItems });
+                onClose();
+              }}
+              className="w-full sm:w-auto flex items-center justify-center gap-2 rounded-2xl bg-white border border-ink-200 px-4 py-3 text-sm font-semibold text-ink-900 shadow-xs hover:bg-ink-100"
+            >
+              <Wand2 size={16} className="text-accent-700" />
+              <span>Try on Digital Twin</span>
+            </button>
+          )}
           <Button fullWidth size="lg" onClick={handleWear}>
             <Check size={18} /> Wear this
           </Button>
-          <button
-            onClick={handleRegenerate}
-            className="flex items-center justify-center rounded-full border border-ink-200 p-3 text-ink-600 transition-all hover:bg-ink-100 active:scale-95"
-            aria-label="Regenerate"
-          >
-            <RefreshCw size={20} />
-          </button>
-          <button
-            onClick={() => {
-              // Simple reject — close
-              onClose();
-            }}
-            className="flex items-center justify-center rounded-full border border-ink-200 p-3 text-ink-600 transition-all hover:bg-ink-100 active:scale-95"
-            aria-label="Not for me"
-          >
-            <ThumbsDown size={20} />
-          </button>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={handleRegenerate}
+              className="flex items-center justify-center rounded-full border border-ink-200 p-3 text-ink-600 transition-all hover:bg-ink-100 active:scale-95"
+              aria-label="Regenerate"
+            >
+              <RefreshCw size={20} />
+            </button>
+            <button
+              onClick={() => {
+                onClose();
+              }}
+              className="flex items-center justify-center rounded-full border border-ink-200 p-3 text-ink-600 transition-all hover:bg-ink-100 active:scale-95"
+              aria-label="Not for me"
+            >
+              <ThumbsDown size={20} />
+            </button>
+          </div>
         </div>
       </div>
     </div>

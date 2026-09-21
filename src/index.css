@@ -16,7 +16,72 @@
   }
 }
 
+@keyframes avatarBreathe {
+  0%, 100% {
+    transform: translateY(0px) scale(1);
+  }
+  50% {
+    transform: translateY(-2.5px) scale(1.012);
+  }
+}
+
+@keyframes avatarLivingSheen {
+  0%, 100% {
+    opacity: 0.15;
+    transform: translateY(-4%) scale(1);
+  }
+  50% {
+    opacity: 0.35;
+    transform: translateY(4%) scale(1.03);
+  }
+}
+
+@keyframes radarScan {
+  0% {
+    top: 0%;
+    opacity: 0.8;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    top: 98%;
+    opacity: 0.3;
+  }
+}
+
+@keyframes snapEquip {
+  0% {
+    transform: scale(0.96);
+    filter: brightness(1.15);
+  }
+  60% {
+    transform: scale(1.025);
+  }
+  100% {
+    transform: scale(1);
+    filter: brightness(1);
+  }
+}
+
 @layer components {
+  .avatar-living-breathe {
+    animation: avatarBreathe 4.2s ease-in-out infinite;
+    transform-origin: center bottom;
+  }
+
+  .avatar-living-sheen {
+    animation: avatarLivingSheen 5s ease-in-out infinite;
+  }
+
+  .scanner-beam {
+    animation: radarScan 2s ease-in-out infinite alternate;
+  }
+
+  .garment-snap-effect {
+    animation: snapEquip 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
+
   .shimmer-bg {
     background: linear-gradient(90deg, #e9e8e3 25%, #f6f6f4 50%, #e9e8e3 75%);
     background-size: 200% 100%;

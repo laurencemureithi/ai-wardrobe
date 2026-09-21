@@ -47,11 +47,14 @@ export function FullBodyOutfit({
 
   const renderItem = (entry: { item: ClothingItem; slot: OutfitSlot }) => {
     const isSel = selectedSlot === entry.slot;
+    const isTop = ['accessory', 'top', 'outerwear'].includes(entry.slot);
+    const isMid = ['bottom', 'dress'].includes(entry.slot);
+    const heightClass = isTop ? h.top : isMid ? h.mid : h.bottom;
     return (
       <div
         key={entry.item.id}
         onClick={() => onSlotClick?.(entry.slot)}
-        className={`relative overflow-hidden rounded-xl bg-ink-100 transition-all duration-200 ${
+        className={`relative flex-1 ${heightClass} overflow-hidden rounded-xl bg-ink-100 transition-all duration-200 ${
           onSlotClick ? 'cursor-pointer hover:shadow-md' : ''
         } ${isSel ? 'ring-2 ring-ink-900' : ''}`}
       >

@@ -1,0 +1,6 @@
+{
+  "name": "Atelier Persona — Living Wardrobe & Digital Twin",
+  "description": "AI-powered living avatar fitting room and personal wardrobe stylist. Generate a photo-accurate digital twin, drag and style clothes in real-time, and plan weekly looks.",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
