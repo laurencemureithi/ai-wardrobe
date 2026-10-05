@@ -5,6 +5,7 @@ import type {
   WeatherData,
   CalendarEvent,
   Formality,
+  OutfitSlot,
 } from '@/lib/types';
 import { generateRecommendations } from '@/lib/recommendationService';
 
@@ -14,7 +15,7 @@ export const INITIAL_STYLIST_MESSAGES: StylistMessage[] = [
   {
     id: 'msg-welcome',
     sender: 'stylist',
-    text: "Hello Alex! I'm your AI Style Assistant. I manage your wardrobe, check the weather, sync with your calendar, and ensure you feel sharp and confident every day. What are you dressing for today?",
+    text: "Hello! I'm your personal AI Style Assistant. I manage your wardrobe, coordinate outfits with the real weather and calendar, and ensure you feel sharp and confident. What are you dressing for today?",
     timestamp: new Date(Date.now() - 3600000).toISOString(),
     actionPrompt: 'Ask for wedding, client meeting, or comfortable everyday outfit.',
   },
@@ -43,80 +44,86 @@ export async function askStylist(
   query: string,
   clothingItems: ClothingItem[],
   weather: WeatherData,
-  events: CalendarEvent[]
+  events: CalendarEvent[],
+  userProfile?: { displayName?: string }
 ): Promise<StylistMessage> {
-  // Simulate intelligent response latency
-  await new Promise((resolve) => setTimeout(resolve, 600));
-
-  const lower = query.toLowerCase();
-  const dressCode = (events[0]?.dressCode || 'Smart Casual').toLowerCase();
-  const formality: Formality = dressCode.includes('formal')
-    ? 'formal'
-    : dressCode.includes('casual')
-    ? (dressCode.includes('smart') ? 'smart casual' : 'casual')
-    : 'smart casual';
-
-  const recs = generateRecommendations(clothingItems, {
-    temp: weather.temperature,
-    rain: weather.rain,
-    occasion: 'consultation',
-    formality,
-  });
-  const primaryRec = recs[0] || null;
-
   let text = '';
-  let returnedRec: Recommendation | undefined = primaryRec || undefined;
+  let returnedRec: Recommendation | undefined = undefined;
 
-  if (lower.includes('wedding')) {
-    text = `For a wedding, elegance and subtlety are key. I've paired clean neutral tailoring with polished leather shoes so you look sophisticated without competing with the wedding party. Notice the breathable fabric balance for both indoor and outdoor reception venues.`;
-    // Find formal pieces
-    const blazer = clothingItems.find((i) => i.name.toLowerCase().includes('blazer') || i.category === 'outerwear');
-    const shirt = clothingItems.find((i) => i.name.toLowerCase().includes('shirt') && i.category === 'tops');
-    const pants = clothingItems.find((i) => i.category === 'bottoms' && !i.name.toLowerCase().includes('jean'));
-    const shoes = clothingItems.find((i) => i.category === 'shoes' && !i.name.toLowerCase().includes('sneak'));
+  try {
+    const res = await fetch('/api/stylist/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        userQuery: query,
+        wardrobeItems: clothingItems,
+        weather,
+        events,
+        userProfile,
+      }),
+    });
 
-    if (blazer && shirt && pants && shoes) {
-      returnedRec = {
-        items: [
-          { item: shirt, slot: 'top' },
-          { item: blazer, slot: 'outerwear' },
-          { item: pants, slot: 'bottom' },
-          { item: shoes, slot: 'shoes' },
-        ],
-        confidence: 0.98,
-        reason: 'Harmonious formal ensemble suited for wedding ceremonies and banquets.',
-        style: 'Modern Formal',
-      };
+    if (res.ok) {
+      const json = await res.json();
+      if (json.success && json.data) {
+        text = json.data.reply;
+        const recNames: string[] = json.data.recommendedItemNames || [];
+        const matchedItems: { item: ClothingItem; slot: OutfitSlot }[] = [];
+
+        for (const name of recNames) {
+          const item = clothingItems.find(
+            (c) =>
+              c.name.toLowerCase().includes(name.toLowerCase()) ||
+              name.toLowerCase().includes(c.name.toLowerCase())
+          );
+          if (item) {
+            const slot =
+              item.category === 'tops'
+                ? 'top'
+                : item.category === 'bottoms'
+                ? 'bottom'
+                : item.category === 'outerwear'
+                ? 'outerwear'
+                : item.category === 'shoes'
+                ? 'shoes'
+                : 'accessory';
+            if (!matchedItems.some((m) => m.slot === slot)) {
+              matchedItems.push({ item, slot });
+            }
+          }
+        }
+
+        if (matchedItems.length >= 2) {
+          returnedRec = {
+            items: matchedItems,
+            confidence: 0.96,
+            reason: json.data.styleReason || 'Hand-picked for current conditions.',
+            style: json.data.outfitTitle || 'Curated Look',
+          };
+        }
+      }
     }
-  } else if (lower.includes('tomorrow') || lower.includes('morning') || lower.includes('work')) {
-    const nextMeeting = events[0];
-    const meetingTitle = nextMeeting ? nextMeeting.title : 'work day';
-    text = `For tomorrow's ${meetingTitle}, I took into account tomorrow's ${weather.temperature}°C forecast and your clean wardrobe rotation. Here is a balanced, high-confidence outfit ready to wear.`;
-  } else if (lower.includes('professional') || lower.includes('meeting') || lower.includes('ceo')) {
-    text = `Making this more professional: crisp structured collar, tailored trousers, and dark-toned leather accents. This silhouette conveys decisive leadership and elevated composure.`;
-  } else if (lower.includes('comfort') || lower.includes('tired') || lower.includes('relax')) {
-    text = `Comfort-first mode activated. Soft breathable cottons, relaxed shoulder drape, and footwear with superior cushioning. You'll stay cozy without looking disheveled.`;
-    const tee = clothingItems.find((i) => i.subcategory === 't-shirt' || i.name.toLowerCase().includes('t-shirt'));
-    const pants = clothingItems.find((i) => i.category === 'bottoms');
-    const sneakers = clothingItems.find((i) => i.name.toLowerCase().includes('sneak') || i.category === 'shoes');
-    if (tee && pants && sneakers) {
-      returnedRec = {
-        items: [
-          { item: tee, slot: 'top' },
-          { item: pants, slot: 'bottom' },
-          { item: sneakers, slot: 'shoes' },
-        ],
-        confidence: 0.95,
-        reason: 'Ultra-soft relaxed knitwear pairing for high comfort and ease.',
-        style: 'Minimal Comfort',
-      };
-    }
-  } else if (lower.includes('different') || lower.includes('never worn') || lower.includes('unworn')) {
-    text = `Here is a fresh combination you haven't worn in weeks! Recombining versatile neutrals gives your wardrobe double the mileage without purchasing anything new.`;
-  } else if (lower.includes('pose') || lower.includes('photoshoot')) {
-    text = `I've prepared this outfit across multiple pose profiles (Executive Stance, Street Stride, Profile, and Editorial Turn). Tap 'Try on Digital Twin' to view the full photoshoot sequence!`;
-  } else {
-    text = `Based on your style preferences and the ${weather.condition} forecast in ${weather.location}, here is a tailored recommendation curated to save you morning decision fatigue.`;
+  } catch (err) {
+    console.warn('[aiStylistService] Call to /api/stylist/chat failed, using local rules:', err);
+  }
+
+  // Fallback if network fails
+  if (!text) {
+    const dressCode = (events[0]?.dressCode || 'Smart Casual').toLowerCase();
+    const formality: Formality = dressCode.includes('formal')
+      ? 'formal'
+      : dressCode.includes('casual')
+      ? (dressCode.includes('smart') ? 'smart casual' : 'casual')
+      : 'smart casual';
+
+    const recs = generateRecommendations(clothingItems, {
+      temp: weather.temperature,
+      rain: weather.rain,
+      occasion: 'consultation',
+      formality,
+    });
+    returnedRec = recs[0] || undefined;
+    text = `Based on your wardrobe and the current ${weather.condition} forecast in ${weather.location}, here is a balanced outfit curated for comfort and sharp presence.`;
   }
 
   const responseMsg: StylistMessage = {

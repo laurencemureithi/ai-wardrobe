@@ -240,12 +240,33 @@ export function DigitalTwinScreen({
       customAvatarGenerated: true,
       livingStateEnabled: true,
       skinTone: result.skinTone,
+      skinToneHex: result.skinToneHex,
+      skinShadowHex: result.skinShadowHex,
+      skinHighlightHex: result.skinHighlightHex,
+      hairStyle: result.hairStyle,
+      hairColor: result.hairColor,
+      hairColorHex: result.hairColorHex,
+      eyeColor: result.eyeColor,
+      faceShape: result.faceShape,
+      bodyType: result.bodyType,
+      aestheticVibe: result.aestheticVibe,
+      displayName: result.displayName || profile.displayName,
       avatarLikenessNotes: result.notes,
       lastUpdated: new Date().toISOString(),
     };
     setProfile(updated);
     saveDigitalTwinProfile(updated);
     setShowAvatarCreator(false);
+  };
+
+  const handleUpdateTwinFraming = (framing: { faceOffsetY?: number; faceOffsetX?: number; faceScale?: number }) => {
+    const updated: DigitalTwinProfile = {
+      ...profile,
+      ...framing,
+      lastUpdated: new Date().toISOString(),
+    };
+    setProfile(updated);
+    saveDigitalTwinProfile(updated);
   };
 
   const handleResetToBlankAvatar = () => {
@@ -505,8 +526,9 @@ export function DigitalTwinScreen({
           <PhotorealisticTwinStage
             equippedItems={activeOutfitItems}
             userReferencePhotoUrl={profile.referencePhotoUrl}
-            userName={profile.displayName || 'Alex'}
+            userName={profile.displayName || 'You'}
             gender={profile.presentationContext}
+            twinProfile={profile}
             onEquipItem={handleEquipItem}
             onRemoveSlot={handleRemoveSlot}
             isDragOver={isDragOver}
@@ -519,6 +541,7 @@ export function DigitalTwinScreen({
             }}
             onSelectPreset={handlePresetSelect}
             onResetToBlank={handleResetToBlankAvatar}
+            onUpdateTwinFraming={handleUpdateTwinFraming}
           />
         ) : (
           <LiveMannequin

@@ -11,8 +11,8 @@ import {
   Activity,
   Check,
 } from 'lucide-react';
-import type { ClothingItem, OutfitSlot, PresentationContext } from '@/lib/types';
-import { USER_AVATAR_PRESETS } from '@/lib/digitalTwinService';
+import type { ClothingItem, OutfitSlot, PresentationContext, DigitalTwinProfile } from '@/lib/types';
+import { USER_AVATAR_PRESETS, VirtualTryOnService } from '@/lib/digitalTwinService';
 
 export type TwinViewAngle = 'front' | 'three_quarter' | 'side' | 'back' | 'detail';
 
@@ -21,6 +21,7 @@ interface PhotorealisticTwinStageProps {
   userReferencePhotoUrl: string | null;
   userName: string;
   gender: PresentationContext;
+  twinProfile?: DigitalTwinProfile;
   onEquipItem?: (item: ClothingItem) => void;
   onRemoveSlot?: (slot: OutfitSlot) => void;
   isDragOver?: boolean;
@@ -29,6 +30,7 @@ interface PhotorealisticTwinStageProps {
   onPoseChange?: (poseId: string) => void;
   onSelectPreset?: (preset: (typeof USER_AVATAR_PRESETS)[0]) => void;
   onResetToBlank?: () => void;
+  onUpdateTwinFraming?: (framing: { faceOffsetY?: number; faceOffsetX?: number; faceScale?: number }) => void;
 }
 
 interface LightingSetting {
@@ -207,18 +209,84 @@ export function PhotorealisticTwinStage({
   userReferencePhotoUrl,
   userName,
   gender,
+  twinProfile,
   onRemoveSlot,
   isDragOver = false,
   onOpenAvatarCreator,
   onResetToBlank,
+  onUpdateTwinFraming,
 }: PhotorealisticTwinStageProps) {
+  // Stage Display Mode: Interactive 3D Model vs Real Photo Lookbook
+  const [stageMode, setStageMode] = useState<'twin' | 'lookbook'>('twin');
+  const [showFaceControls, setShowFaceControls] = useState(false);
+
   // Active View & Angle State
   const [viewAngle, setViewAngle] = useState<TwinViewAngle>('front');
   const [orbitDeg, setOrbitDeg] = useState<number>(0);
   const [activeLighting, setActiveLighting] = useState<LightingSetting>(LIGHTING_PRESETS[0]);
   const [showHotspots, setShowHotspots] = useState(true);
   const [selectedHotspot, setSelectedHotspot] = useState<FitHotspot | null>(null);
+  const [isSynthesizingTryOn, setIsSynthesizingTryOn] = useState(false);
+  const [tryOnReport, setTryOnReport] = useState<{
+    drapeScore: number;
+    colorHarmony: string;
+    editorialCaption: string;
+    stylingNotes: string;
+    tailoringDiagnosis?: {
+      shoulders: string;
+      chest: string;
+      waist: string;
+      trouserBreak: string;
+    };
+  } | null>(null);
   const livingBreathing = true;
+
+  const activeFacePhoto = twinProfile?.generatedAvatarUrl || userReferencePhotoUrl;
+  const faceOffsetX = twinProfile?.faceOffsetX || 0;
+  const faceOffsetY = twinProfile?.faceOffsetY || 0;
+  const faceScale = twinProfile?.faceScale || 1.0;
+
+  const skinMain = twinProfile?.skinToneHex || '#cf9e7d';
+  const skinShadow = twinProfile?.skinShadowHex || '#8d5b40';
+  const skinHighlight = twinProfile?.skinHighlightHex || '#dfb293';
+
+  const handleRunAiTryOn = async () => {
+    setIsSynthesizingTryOn(true);
+    try {
+      const itemsList = equippedItems.map((i) => i.item);
+      const res = await VirtualTryOnService.requestTryOn({
+        twinProfile: twinProfile || {
+          id: 'temp',
+          userId: 'user',
+          displayName: userName,
+          presentationContext: gender,
+          referencePhotoUrl: userReferencePhotoUrl,
+          preferredPoses: [],
+          activePoseId: 'front',
+          activeAngle: 'front',
+          activeBackground: 'studio',
+          lastUpdated: new Date().toISOString(),
+        },
+        items: itemsList,
+        pose: {
+          id: 'front',
+          name: viewAngle.toUpperCase() + ' Stance',
+          category: 'fashion',
+          presentationContext: gender,
+          occasion: 'Fitting Room',
+          cameraAngle: 'front',
+          description: 'Custom Fitting Stance',
+        },
+        angle: 'front',
+        background: 'studio',
+      });
+      if (res.tailoringReport) {
+        setTryOnReport(res.tailoringReport);
+      }
+    } finally {
+      setIsSynthesizingTryOn(false);
+    }
+  };
 
   // Derive Garment Slots
   const equippedTop = equippedItems.find((i) => i.slot === 'top')?.item;
@@ -384,7 +452,45 @@ export function PhotorealisticTwinStage({
         </div>
 
         {/* Right Action buttons */}
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Mode Switcher */}
+          <div className="flex items-center gap-1 bg-stone-100 p-0.5 rounded-xl border border-stone-200">
+            <button
+              onClick={() => setStageMode('twin')}
+              className={`px-2.5 py-1 rounded-lg text-2xs font-semibold transition-all ${
+                stageMode === 'twin'
+                  ? 'bg-ink-950 text-white shadow-2xs'
+                  : 'text-ink-600 hover:text-ink-950'
+              }`}
+            >
+              3D Living Twin
+            </button>
+            <button
+              onClick={() => setStageMode('lookbook')}
+              className={`px-2.5 py-1 rounded-lg text-2xs font-semibold transition-all ${
+                stageMode === 'lookbook'
+                  ? 'bg-ink-950 text-white shadow-2xs'
+                  : 'text-ink-600 hover:text-ink-950'
+              }`}
+            >
+              Real Photo Studio
+            </button>
+          </div>
+
+          {activeFacePhoto && (
+            <button
+              onClick={() => setShowFaceControls(!showFaceControls)}
+              className={`flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-2xs font-medium border transition-all ${
+                showFaceControls
+                  ? 'bg-amber-100 border-amber-300 text-amber-900 shadow-xs'
+                  : 'bg-white border-stone-200 text-ink-600 hover:bg-stone-50'
+              }`}
+              title="Fine-tune face framing and alignment on model"
+            >
+              <span>Align Face</span>
+            </button>
+          )}
+
           {userReferencePhotoUrl ? (
             <div className="flex items-center gap-1.5">
               <button
@@ -427,6 +533,17 @@ export function PhotorealisticTwinStage({
           >
             <Activity size={12} className={showHotspots ? 'text-sand-300' : ''} />
             <span className="hidden sm:inline">Fit Anchors</span>
+          </button>
+
+          {/* AI Neural Try-On Review Button */}
+          <button
+            onClick={handleRunAiTryOn}
+            disabled={isSynthesizingTryOn || equippedItems.length === 0}
+            title="Generate AI Tailoring Analysis and Editorial Critique"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-2xs font-semibold bg-ink-950 text-white shadow-xs hover:bg-ink-800 disabled:opacity-40 transition-all border border-stone-800"
+          >
+            <Sparkles size={12} className={isSynthesizingTryOn ? 'animate-spin text-sand-300' : 'text-sand-300'} />
+            <span>{isSynthesizingTryOn ? 'AI Analyzing...' : 'AI Try-On Review'}</span>
           </button>
         </div>
       </div>
@@ -521,28 +638,164 @@ export function PhotorealisticTwinStage({
           </div>
         )}
 
-        {/* BLANK AVATAR INFORMATIVE CALLOUT (When user has not uploaded photo) */}
-        {!userReferencePhotoUrl && (
-          <div className="absolute top-4 left-4 right-4 sm:left-auto sm:right-6 sm:max-w-xs z-30 pointer-events-auto">
-            <div className="rounded-2xl bg-white/90 backdrop-blur-md p-3.5 shadow-lg border border-stone-200/90 text-left">
-              <div className="flex items-center gap-2 mb-1">
-                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-stone-200 text-ink-600">
-                  <User size={12} />
+        {/* CALIBRATED BIOMETRIC AVATAR BADGE (When user has uploaded photo) */}
+        {userReferencePhotoUrl && (
+          <div className="absolute top-4 left-4 z-30 pointer-events-auto max-w-[240px] sm:max-w-xs animate-fade-in">
+            <div className="rounded-2xl bg-white/95 backdrop-blur-md p-3 shadow-lg border border-stone-200/90 text-left">
+              <div className="flex items-center gap-2 mb-1.5">
+                <div className="relative h-8 w-8 rounded-full overflow-hidden border border-emerald-400 bg-stone-100 shrink-0">
+                  <img src={userReferencePhotoUrl} alt="" className="h-full w-full object-cover" />
+                  <span className="absolute bottom-0 right-0 h-2 w-2 rounded-full bg-emerald-500 ring-1 ring-white" />
+                </div>
+                <div className="truncate">
+                  <p className="text-2xs font-bold text-ink-950 truncate">{userName}’s Avatar</p>
+                  <p className="text-3xs text-emerald-700 font-semibold flex items-center gap-1">
+                    <Check size={9} />
+                    <span>Biometric Face Linked</span>
+                  </p>
+                </div>
+              </div>
+              <div className="flex flex-wrap items-center gap-1 text-3xs text-ink-600">
+                <span className="bg-stone-100 px-1.5 py-0.5 rounded text-ink-800 font-medium">
+                  {twinProfile?.skinTone || 'Warm Sand'}
                 </span>
-                <span className="text-2xs font-bold uppercase tracking-wider text-ink-900">
-                  Blank Model Form
+                {twinProfile?.aestheticVibe && (
+                  <span className="bg-sand-100 text-sand-800 px-1.5 py-0.5 rounded font-medium truncate max-w-[140px]">
+                    {twinProfile.aestheticVibe}
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* FACE FRAMING & ALIGNMENT CONTROLS */}
+        {showFaceControls && activeFacePhoto && (
+          <div className="absolute top-4 left-4 z-40 bg-white/95 backdrop-blur-md p-3.5 rounded-2xl shadow-xl border border-ink-200 text-xs w-64 animate-fade-in">
+            <div className="flex items-center justify-between mb-2">
+              <span className="font-semibold text-ink-900 text-2xs uppercase tracking-wider">Face Fit & Alignment</span>
+              <button onClick={() => setShowFaceControls(false)} className="text-ink-400 hover:text-ink-700">
+                <X size={14} />
+              </button>
+            </div>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-2xs font-medium">
+                <span>Scale ({Math.round(faceScale * 100)}%)</span>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => onUpdateTwinFraming?.({ faceScale: Math.max(0.7, Number((faceScale - 0.05).toFixed(2))) })}
+                    className="px-2 py-0.5 rounded bg-stone-100 hover:bg-stone-200 text-ink-800 font-bold"
+                  >
+                    -
+                  </button>
+                  <button
+                    onClick={() => onUpdateTwinFraming?.({ faceScale: Math.min(1.8, Number((faceScale + 0.05).toFixed(2))) })}
+                    className="px-2 py-0.5 rounded bg-stone-100 hover:bg-stone-200 text-ink-800 font-bold"
+                  >
+                    +
+                  </button>
+                </div>
+              </div>
+              <div className="flex items-center justify-between text-2xs font-medium">
+                <span>Vertical Shift ({faceOffsetY}px)</span>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => onUpdateTwinFraming?.({ faceOffsetY: faceOffsetY - 2 })}
+                    className="px-2 py-0.5 rounded bg-stone-100 hover:bg-stone-200 text-ink-800 font-bold"
+                  >
+                    ▲
+                  </button>
+                  <button
+                    onClick={() => onUpdateTwinFraming?.({ faceOffsetY: faceOffsetY + 2 })}
+                    className="px-2 py-0.5 rounded bg-stone-100 hover:bg-stone-200 text-ink-800 font-bold"
+                  >
+                    ▼
+                  </button>
+                </div>
+              </div>
+              <div className="flex items-center justify-between text-2xs font-medium">
+                <span>Horizontal Shift ({faceOffsetX}px)</span>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => onUpdateTwinFraming?.({ faceOffsetX: faceOffsetX - 2 })}
+                    className="px-2 py-0.5 rounded bg-stone-100 hover:bg-stone-200 text-ink-800 font-bold"
+                  >
+                    ◀
+                  </button>
+                  <button
+                    onClick={() => onUpdateTwinFraming?.({ faceOffsetX: faceOffsetX + 2 })}
+                    className="px-2 py-0.5 rounded bg-stone-100 hover:bg-stone-200 text-ink-800 font-bold"
+                  >
+                    ▶
+                  </button>
+                </div>
+              </div>
+              <button
+                onClick={() => onUpdateTwinFraming?.({ faceScale: 1.0, faceOffsetY: 0, faceOffsetX: 0 })}
+                className="w-full text-center text-3xs text-ink-500 hover:text-ink-900 pt-1.5 border-t border-stone-100"
+              >
+                Reset Default Framing
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* AI TRY-ON REPORT FLOATING CARD */}
+        {tryOnReport && (
+          <div className="absolute top-4 right-4 z-40 max-w-sm w-full animate-fade-in">
+            <div className="rounded-2xl bg-white/95 backdrop-blur-md p-4 shadow-2xl border border-sand-300">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-1.5">
+                  <Sparkles size={14} className="text-sand-600" />
+                  <span className="text-2xs font-bold uppercase tracking-wider text-ink-950">
+                    AI Try-On Editorial Review
+                  </span>
+                </div>
+                <button
+                  onClick={() => setTryOnReport(null)}
+                  className="rounded-full p-1 text-stone-400 hover:text-stone-700"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+
+              <div className="flex items-baseline justify-between mb-2">
+                <span className="text-sm font-serif font-bold text-ink-950">
+                  Drape & Proportion Score
+                </span>
+                <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                  {tryOnReport.drapeScore}% Harmonious
                 </span>
               </div>
-              <p className="text-2xs text-ink-600 leading-relaxed mb-2.5">
-                No user photo uploaded yet. This neutral atelier silhouette lets you preview clothes immediately. Upload a photo anytime to personalize with your real likeness!
+
+              <p className="text-2xs text-ink-700 italic leading-relaxed mb-3 bg-stone-50 p-2.5 rounded-xl border border-stone-150">
+                “{tryOnReport.editorialCaption}”
               </p>
-              <button
-                onClick={onOpenAvatarCreator}
-                className="w-full flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-xl bg-ink-950 text-white text-2xs font-semibold hover:bg-ink-800 transition-all shadow-xs"
-              >
-                <Camera size={12} className="text-sand-300" />
-                <span>Snap or Upload Portrait</span>
-              </button>
+
+              {tryOnReport.tailoringDiagnosis && (
+                <div className="space-y-1 text-3xs text-ink-600 mb-2">
+                  <div className="flex justify-between border-b border-stone-100 py-0.5">
+                    <span className="font-semibold text-ink-800">Shoulders:</span>
+                    <span>{tryOnReport.tailoringDiagnosis.shoulders}</span>
+                  </div>
+                  <div className="flex justify-between border-b border-stone-100 py-0.5">
+                    <span className="font-semibold text-ink-800">Chest Ease:</span>
+                    <span>{tryOnReport.tailoringDiagnosis.chest}</span>
+                  </div>
+                  <div className="flex justify-between border-b border-stone-100 py-0.5">
+                    <span className="font-semibold text-ink-800">Waistline:</span>
+                    <span>{tryOnReport.tailoringDiagnosis.waist}</span>
+                  </div>
+                  <div className="flex justify-between py-0.5">
+                    <span className="font-semibold text-ink-800">Trouser Break:</span>
+                    <span>{tryOnReport.tailoringDiagnosis.trouserBreak}</span>
+                  </div>
+                </div>
+              )}
+
+              <p className="text-3xs text-ink-500 leading-normal pt-1 border-t border-stone-100">
+                {tryOnReport.stylingNotes}
+              </p>
             </div>
           </div>
         )}
@@ -558,17 +811,67 @@ export function PhotorealisticTwinStage({
         <div className="absolute bottom-9 w-60 sm:w-68 h-4 rounded-[50%] bg-ink-950/20 blur-xs pointer-events-none" />
 
         {/* Dynamic Avatar Container with View Zoom / Macro Crop */}
-        <div
-          className={`relative h-[620px] sm:h-[680px] w-full max-w-[420px] flex items-center justify-center transition-transform duration-500 ease-out ${
-            viewAngle === 'detail' ? 'scale-[1.65] origin-[50%_32%]' : 'scale-100 origin-center'
-          } ${livingBreathing ? 'animate-living-breathe' : ''}`}
-        >
-          {/* THE PHOTOREALISTIC SVG / 3D CANVAS MANNEQUIN ENGINE */}
-          <svg
-            viewBox="0 0 400 700"
-            className="h-full w-full drop-shadow-2xl overflow-visible select-none"
-            preserveAspectRatio="xMidYMid meet"
+        {stageMode === 'lookbook' && activeFacePhoto ? (
+          <div className="relative z-10 w-full max-w-2xl flex flex-col md:flex-row items-center gap-6 p-6 animate-fade-in my-8">
+            <div className="relative w-64 h-84 rounded-3xl overflow-hidden shadow-2xl border-4 border-white/95 shrink-0 bg-stone-100">
+              <img
+                src={activeFacePhoto}
+                alt={userName}
+                className="h-full w-full object-cover"
+                style={{ filter: activeLighting.filter }}
+              />
+              <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent p-3 text-white">
+                <p className="font-serif text-sm font-bold">{userName}</p>
+                <p className="text-3xs text-sand-300">Live Client Portrait • {activeLighting.name}</p>
+              </div>
+            </div>
+
+            <div className="flex-1 space-y-3 w-full">
+              <div className="rounded-2xl bg-white/95 backdrop-blur-md p-4 border border-ink-100 shadow-sm">
+                <h4 className="text-xs font-bold text-ink-950 uppercase tracking-wider mb-2">Equipped Ensemble</h4>
+                {equippedItems.length === 0 ? (
+                  <p className="text-2xs text-ink-500 italic">No garments equipped yet. Choose items below to try on.</p>
+                ) : (
+                  <div className="space-y-1.5">
+                    {equippedItems.map(({ item, slot }) => (
+                      <div key={item.id} className="flex items-center justify-between text-xs p-1.5 rounded-lg bg-stone-50 border border-stone-100">
+                        <span className="font-semibold text-ink-900">{item.name}</span>
+                        <span className="text-3xs text-ink-500 uppercase bg-white px-2 py-0.5 rounded border border-stone-200">{slot}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <button
+                onClick={handleRunAiTryOn}
+                disabled={isSynthesizingTryOn || equippedItems.length === 0}
+                className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-ink-950 text-white text-xs font-semibold shadow-md hover:bg-ink-800 disabled:opacity-50 transition-all"
+              >
+                <Sparkles size={14} className={isSynthesizingTryOn ? 'animate-spin text-sand-300' : 'text-sand-300'} />
+                <span>{isSynthesizingTryOn ? 'AI Analyzing Tailoring...' : 'Analyze Tailored Fit on Portrait'}</span>
+              </button>
+
+              <button
+                onClick={() => setStageMode('twin')}
+                className="w-full py-2 px-4 rounded-xl text-xs font-medium text-ink-700 bg-white hover:bg-stone-50 border border-stone-200 transition-all"
+              >
+                Switch to 3D Living Model
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div
+            className={`relative h-[620px] sm:h-[680px] w-full max-w-[420px] flex items-center justify-center transition-transform duration-500 ease-out ${
+              viewAngle === 'detail' ? 'scale-[1.65] origin-[50%_32%]' : 'scale-100 origin-center'
+            } ${livingBreathing ? 'animate-living-breathe' : ''}`}
           >
+            {/* THE PHOTOREALISTIC SVG / 3D CANVAS MANNEQUIN ENGINE */}
+            <svg
+              viewBox="0 0 400 700"
+              className="h-full w-full drop-shadow-2xl overflow-visible select-none"
+              preserveAspectRatio="xMidYMid meet"
+            >
             <defs>
               {/* Studio Shading & Lighting Gradients */}
               <linearGradient id="bodyBlankGrad" x1="0%" y1="0%" x2="100%" y2="0%">
@@ -580,11 +883,11 @@ export function PhotorealisticTwinStage({
               </linearGradient>
 
               <linearGradient id="skinGradReal" x1="0%" y1="0%" x2="100%" y2="0%">
-                <stop offset="0%" stopColor="#b47d5e" />
-                <stop offset="30%" stopColor="#cf9e7d" />
-                <stop offset="65%" stopColor="#dfb293" />
-                <stop offset="85%" stopColor="#b47d5e" />
-                <stop offset="100%" stopColor="#8d5b40" />
+                <stop offset="0%" stopColor={skinShadow} />
+                <stop offset="30%" stopColor={skinMain} />
+                <stop offset="65%" stopColor={skinHighlight} />
+                <stop offset="85%" stopColor={skinMain} />
+                <stop offset="100%" stopColor={skinShadow} />
               </linearGradient>
 
               {/* Garment Fabric Dynamic Gradients */}
@@ -620,7 +923,7 @@ export function PhotorealisticTwinStage({
 
               {/* Head Silhouette Mask */}
               <clipPath id="avatarHeadClip">
-                <ellipse cx="200" cy="95" rx="34" ry="44" />
+                <path d="M 166 88 C 166 52 180 44 200 44 C 220 44 234 52 234 88 C 234 116 218 138 200 138 C 182 138 166 116 166 88 Z" />
               </clipPath>
             </defs>
 
@@ -1081,32 +1384,32 @@ export function PhotorealisticTwinStage({
 
             {/* LAYER 7: AVATAR HEAD (Real User Photo OR Blank Sculptural Atelier Head) */}
             <g id="avatarHeadGroup">
-              {userReferencePhotoUrl ? (
+              {activeFacePhoto ? (
                 /* REAL USER PHOTO INTEGRATION */
                 <g id="realUserFaceContainer">
                   {/* Perspective Head Framing based on active view angle */}
                   {viewAngle === 'front' || viewAngle === 'detail' ? (
-                    <g>
+                    <g
+                      transform={`translate(${faceOffsetX}, ${faceOffsetY}) scale(${faceScale})`}
+                      style={{ transformOrigin: '200px 95px' }}
+                    >
                       {/* Integrated User Portrait Image */}
                       <image
-                        href={userReferencePhotoUrl}
-                        x="166"
-                        y="51"
-                        width="68"
-                        height="88"
+                        href={activeFacePhoto}
+                        x="162"
+                        y="46"
+                        width="76"
+                        height="98"
                         preserveAspectRatio="xMidYMid slice"
                         clipPath="url(#avatarHeadClip)"
                         className="filter contrast-[1.03] brightness-[1.02]"
                       />
                       {/* Feathered Edge Blend into Neck */}
-                      <ellipse
-                        cx="200"
-                        cy="95"
-                        rx="34"
-                        ry="44"
+                      <path
+                        d="M 166 88 C 166 52 180 44 200 44 C 220 44 234 52 234 88 C 234 116 218 138 200 138 C 182 138 166 116 166 88 Z"
                         fill="none"
-                        stroke="rgba(0,0,0,0.12)"
-                        strokeWidth="2"
+                        stroke="rgba(0,0,0,0.14)"
+                        strokeWidth="1.5"
                       />
                       {/* Subtle Jaw Vignette */}
                       <path
@@ -1117,46 +1420,49 @@ export function PhotorealisticTwinStage({
                     </g>
                   ) : viewAngle === 'three_quarter' ? (
                     /* 3/4 Turn Head with perspective offset */
-                    <g transform="translate(8, 0)">
+                    <g
+                      transform={`translate(${8 + faceOffsetX}, ${faceOffsetY}) scale(${faceScale})`}
+                      style={{ transformOrigin: '200px 95px' }}
+                    >
                       <image
-                        href={userReferencePhotoUrl}
+                        href={activeFacePhoto}
                         x="164"
-                        y="52"
-                        width="68"
-                        height="88"
+                        y="48"
+                        width="72"
+                        height="96"
                         preserveAspectRatio="xMidYMid slice"
                         clipPath="url(#avatarHeadClip)"
                         className="filter contrast-[1.04]"
                       />
                       {/* 3D Perspective Rim Shadow */}
-                      <ellipse
-                        cx="200"
-                        cy="95"
-                        rx="34"
-                        ry="44"
+                      <path
+                        d="M 166 88 C 166 52 180 44 200 44 C 220 44 234 52 234 88 C 234 116 218 138 200 138 C 182 138 166 116 166 88 Z"
                         fill="rgba(0,0,0,0.18)"
                         className="mix-blend-multiply"
                       />
                     </g>
                   ) : viewAngle === 'side' ? (
                     /* Side Profile Contour */
-                    <g transform="translate(12, 0)">
+                    <g
+                      transform={`translate(${12 + faceOffsetX}, ${faceOffsetY}) scale(${faceScale})`}
+                      style={{ transformOrigin: '200px 95px' }}
+                    >
                       <ellipse cx="196" cy="95" rx="30" ry="44" fill="url(#skinGradReal)" />
                       <image
-                        href={userReferencePhotoUrl}
+                        href={activeFacePhoto}
                         x="166"
-                        y="52"
-                        width="60"
-                        height="88"
+                        y="50"
+                        width="64"
+                        height="92"
                         preserveAspectRatio="xMidYMid slice"
                         clipPath="url(#avatarHeadClip)"
-                        opacity="0.85"
+                        opacity="0.88"
                       />
                     </g>
                   ) : (
                     /* Back View Head (Natural hair & nape) */
                     <g>
-                      <ellipse cx="200" cy="95" rx="34" ry="44" fill="#262626" />
+                      <ellipse cx="200" cy="95" rx="34" ry="44" fill={twinProfile?.hairColorHex || '#262626'} />
                       <ellipse cx="200" cy="85" rx="32" ry="34" fill="#171717" />
                       {/* Neck Nape Shading */}
                       <path d="M 188 126 C 194 134 206 134 212 126 Z" fill="url(#skinGradReal)" />
@@ -1233,6 +1539,7 @@ export function PhotorealisticTwinStage({
               })}
           </svg>
         </div>
+        )}
 
         {/* ACTIVE FIT DIAGNOSTIC POPUP */}
         {selectedHotspot && (

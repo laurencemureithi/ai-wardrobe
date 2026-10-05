@@ -205,17 +205,64 @@ export function HomeScreen({ onNavigate, onOutfitTap, onTryInDigitalTwin }: Home
 
   if (items.length === 0) {
     return (
-      <div className="px-6 pt-20 max-w-lg mx-auto">
-        <EmptyState
-          icon={<AlertCircle size={28} />}
-          title="Your wardrobe is empty"
-          description="Add a few clothing items and I'll start recommending outfits for you."
-          action={
-            <Button onClick={() => onNavigate('wardrobe')}>
-              Add to wardrobe
-            </Button>
-          }
-        />
+      <div className="px-6 pt-16 max-w-xl mx-auto text-center animate-fade-in">
+        <div className="flex h-20 w-20 mx-auto items-center justify-center rounded-3xl bg-ink-950 text-sand-300 shadow-md mb-5">
+          <Sparkles size={36} />
+        </div>
+        <h2 className="font-serif text-2xl font-bold text-ink-950">
+          Welcome to your fresh wardrobe{profile?.display_name ? `, ${profile.display_name}` : ''}
+        </h2>
+        <p className="mt-2 text-sm text-ink-600 max-w-md mx-auto leading-relaxed">
+          Your personal wardrobe is ready. Take photos of your clothes to auto-catalog them with AI, or calibrate your digital twin avatar.
+        </p>
+
+        <div className="mt-8 grid grid-cols-1 sm:grid-cols-2 gap-3.5 text-left">
+          <div
+            onClick={() => onNavigate('wardrobe')}
+            className="group cursor-pointer p-4 rounded-2xl bg-white border border-ink-200/80 shadow-xs hover:border-ink-950 transition-all"
+          >
+            <div className="flex items-center gap-2.5 mb-2">
+              <div className="p-2 rounded-xl bg-ink-100 text-ink-900 group-hover:bg-ink-950 group-hover:text-sand-300 transition-colors">
+                <Sparkles size={18} />
+              </div>
+              <h3 className="text-sm font-bold text-ink-950">AI Garment Scanner</h3>
+            </div>
+            <p className="text-2xs text-ink-500">
+              Snap a photo of your tops, trousers, or jackets. Gemini automatically extracts colors, fabric, and tags.
+            </p>
+          </div>
+
+          <div
+            onClick={() => onNavigate('twin')}
+            className="group cursor-pointer p-4 rounded-2xl bg-white border border-ink-200/80 shadow-xs hover:border-ink-950 transition-all"
+          >
+            <div className="flex items-center gap-2.5 mb-2">
+              <div className="p-2 rounded-xl bg-ink-100 text-ink-900 group-hover:bg-ink-950 group-hover:text-sand-300 transition-colors">
+                <Smile size={18} />
+              </div>
+              <h3 className="text-sm font-bold text-ink-950">Build Living Avatar</h3>
+            </div>
+            <p className="text-2xs text-ink-500">
+              Take a selfie or portrait to calibrate your facial biometrics, skin undertones, and living fitting twin.
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-6 flex flex-col sm:flex-row items-center justify-center gap-3">
+          <Button onClick={() => onNavigate('wardrobe')}>
+            Add My First Clothes
+          </Button>
+          <button
+            onClick={async () => {
+              const { restoreSampleClothingItems } = await import('@/lib/wardrobeService');
+              await restoreSampleClothingItems();
+              await load();
+            }}
+            className="text-xs font-semibold text-ink-600 hover:text-ink-900 underline underline-offset-4 py-2 px-3"
+          >
+            Load Sample Capsule for Inspiration
+          </button>
+        </div>
       </div>
     );
   }

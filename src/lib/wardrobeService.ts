@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { clearAllItems, restoreSampleItems, hasSampleItems } from '@/lib/mockSupabase';
 import type { ClothingItem, ClothingCategory, ItemStatus } from '@/lib/types';
 
 export async function fetchClothingItems(): Promise<ClothingItem[]> {
@@ -8,6 +9,49 @@ export async function fetchClothingItems(): Promise<ClothingItem[]> {
     .order('created_at', { ascending: false });
   if (error) throw error;
   return (data ?? []) as ClothingItem[];
+}
+
+export async function clearAllClothingItems(): Promise<void> {
+  clearAllItems();
+}
+
+export async function restoreSampleClothingItems(): Promise<void> {
+  restoreSampleItems();
+}
+
+export function checkHasSampleItems(): boolean {
+  return hasSampleItems();
+}
+
+export interface GarmentAnalysisResult {
+  name: string;
+  category: ClothingCategory;
+  subcategory?: string;
+  color: string;
+  dominantHex: string;
+  material?: string;
+  formality: 'casual' | 'smart casual' | 'formal';
+  season?: string[];
+  stylingNote?: string;
+}
+
+export async function analyzeGarmentImage(imageDataUrl: string): Promise<GarmentAnalysisResult | null> {
+  try {
+    const res = await fetch('/api/garment/analyze-image', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ imageDataUrl }),
+    });
+    if (res.ok) {
+      const json = await res.json();
+      if (json.success && json.data) {
+        return json.data as GarmentAnalysisResult;
+      }
+    }
+  } catch (e) {
+    console.warn('[wardrobeService] Garment AI analysis failed:', e);
+  }
+  return null;
 }
 
 export async function insertClothingItem(

@@ -1,6 +1,29 @@
-import { useEffect, useState, useCallback } from 'react';
-import { Plus, Camera, X, AlertCircle, Search, Wand2 } from 'lucide-react';
-import { fetchClothingItems, insertClothingItem, uploadClothingImage, CATEGORIES, categoryLabel, deleteClothingItem } from '@/lib/wardrobeService';
+import { useEffect, useState, useCallback, useRef } from 'react';
+import {
+  Camera,
+  X,
+  AlertCircle,
+  Search,
+  Wand2,
+  Trash2,
+  Sparkles,
+  Layers,
+  Check,
+  RefreshCw,
+} from 'lucide-react';
+import {
+  fetchClothingItems,
+  insertClothingItem,
+  uploadClothingImage,
+  CATEGORIES,
+  categoryLabel,
+  deleteClothingItem,
+  clearAllClothingItems,
+  restoreSampleClothingItems,
+  checkHasSampleItems,
+  analyzeGarmentImage,
+  type GarmentAnalysisResult,
+} from '@/lib/wardrobeService';
 import { useAuth } from '@/lib/auth';
 import type { ClothingItem, ClothingCategory, Formality, ClothingStatus } from '@/lib/types';
 import { Spinner } from '@/components/ui/Spinner';
@@ -19,6 +42,8 @@ export function WardrobeScreen({ onTryInTwin }: WardrobeScreenProps) {
   const [showAdd, setShowAdd] = useState(false);
   const [error, setError] = useState(false);
   const [selectedItem, setSelectedItem] = useState<ClothingItem | null>(null);
+  const [isSampleMode, setIsSampleMode] = useState(false);
+  const [actionNotice, setActionNotice] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -26,6 +51,7 @@ export function WardrobeScreen({ onTryInTwin }: WardrobeScreenProps) {
     try {
       const data = await fetchClothingItems();
       setItems(data);
+      setIsSampleMode(checkHasSampleItems());
     } catch {
       setError(true);
     } finally {
@@ -36,6 +62,22 @@ export function WardrobeScreen({ onTryInTwin }: WardrobeScreenProps) {
   useEffect(() => {
     load();
   }, [load]);
+
+  const handleClearSampleData = async () => {
+    if (confirm('Clear all sample clothing items and start fresh with your own wardrobe?')) {
+      await clearAllClothingItems();
+      await load();
+      setActionNotice('Sample collection removed. Ready for your personal clothes!');
+      setTimeout(() => setActionNotice(null), 3500);
+    }
+  };
+
+  const handleRestoreSampleData = async () => {
+    await restoreSampleClothingItems();
+    await load();
+    setActionNotice('Sample collection loaded for inspiration.');
+    setTimeout(() => setActionNotice(null), 3500);
+  };
 
   const handleUpdateStatus = (itemId: string, newStatus: ClothingStatus) => {
     setItems((prev) =>
@@ -76,21 +118,72 @@ export function WardrobeScreen({ onTryInTwin }: WardrobeScreenProps) {
   return (
     <div className="min-h-screen pb-24 max-w-7xl mx-auto">
       {/* Header */}
-      <div className="sticky top-0 z-20 bg-ink-50/90 px-4 sm:px-6 pt-8 pb-3 backdrop-blur-lg border-b border-ink-100">
-        <div className="flex items-center justify-between">
+      <div className="sticky top-0 z-20 bg-ink-50/95 px-4 sm:px-6 pt-6 pb-3 backdrop-blur-lg border-b border-ink-100">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
-            <h1 className="font-serif text-2xl sm:text-3xl font-bold text-ink-950">Wardrobe</h1>
+            <div className="flex items-center gap-2">
+              <span className="flex h-5 items-center rounded-md bg-accent-100 px-2 text-2xs font-semibold text-accent-800">
+                <Layers size={12} className="mr-1 inline text-accent-700" /> Personal Closet
+              </span>
+              {isSampleMode ? (
+                <span className="text-3xs font-semibold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
+                  Sample Data Active
+                </span>
+              ) : (
+                <span className="text-3xs font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                  Your Real Wardrobe
+                </span>
+              )}
+            </div>
+            <h1 className="font-serif text-2xl sm:text-3xl font-bold text-ink-950 mt-0.5">
+              My Wardrobe
+            </h1>
             <p className="text-2xs sm:text-xs text-ink-500">
-              {items.length} items logged • Track wear counts, laundry status & virtual fitting
+              {items.length} garments logged • Snap photos of your clothes to auto-categorize with AI
             </p>
           </div>
-          <button
-            onClick={() => setShowAdd(true)}
-            className="flex items-center gap-1.5 rounded-xl bg-ink-950 px-4 py-2 text-xs font-semibold text-white shadow-xs hover:bg-ink-800 transition-all active:scale-95"
-          >
-            <Plus size={16} /> Add Garment
-          </button>
+
+          <div className="flex flex-wrap items-center gap-2">
+            {isSampleMode ? (
+              <button
+                onClick={handleClearSampleData}
+                className="flex items-center gap-1.5 rounded-xl border border-stone-300 bg-white px-3 py-2 text-xs font-semibold text-ink-700 hover:text-red-600 hover:bg-red-50 hover:border-red-200 transition-all shadow-xs"
+                title="Remove sample clothes and start clean"
+              >
+                <Trash2 size={13} />
+                <span>Start Clean Slate</span>
+              </button>
+            ) : (
+              items.length === 0 && (
+                <button
+                  onClick={handleRestoreSampleData}
+                  className="flex items-center gap-1.5 rounded-xl border border-stone-200 bg-white px-3 py-2 text-xs font-semibold text-ink-700 hover:bg-stone-50 transition-all shadow-xs"
+                >
+                  <RefreshCw size={13} />
+                  <span>Load Sample Items</span>
+                </button>
+              )
+            )}
+
+            <button
+              onClick={() => setShowAdd(true)}
+              className="flex items-center gap-1.5 rounded-xl bg-ink-950 px-4 py-2 text-xs font-semibold text-white shadow-xs hover:bg-ink-800 transition-all ring-2 ring-sand-300/30"
+            >
+              <Camera size={15} className="text-sand-300" />
+              <span>Snap / Add Garment</span>
+            </button>
+          </div>
         </div>
+
+        {/* Action toast */}
+        {actionNotice && (
+          <div className="mt-2.5 rounded-xl bg-emerald-50 border border-emerald-200 p-2.5 flex items-center justify-between text-2xs text-emerald-800 animate-fade-in">
+            <span className="flex items-center gap-1.5 font-medium">
+              <Check size={13} className="text-emerald-600" />
+              {actionNotice}
+            </span>
+          </div>
+        )}
 
         {/* Search */}
         <div className="relative mt-3">
@@ -117,7 +210,7 @@ export function WardrobeScreen({ onTryInTwin }: WardrobeScreenProps) {
           </button>
           {CATEGORIES.map((cat) => {
             const count = items.filter((i) => i.category === cat).length;
-            if (count === 0) return null;
+            if (count === 0 && activeCategory !== cat) return null;
             return (
               <button
                 key={cat}
@@ -138,20 +231,36 @@ export function WardrobeScreen({ onTryInTwin }: WardrobeScreenProps) {
       {/* Grid */}
       <div className="px-4 sm:px-6 pt-4">
         {filtered.length === 0 ? (
-          <EmptyState
-            icon={<Plus size={28} />}
-            title={items.length === 0 ? 'Your wardrobe is empty' : 'No items found'}
-            description={
-              items.length === 0
-                ? 'Add your first clothing item to get started.'
-                : 'Try a different category filter or search term.'
-            }
-            action={
-              items.length === 0 ? (
-                <Button onClick={() => setShowAdd(true)}>Add clothing</Button>
-              ) : undefined
-            }
-          />
+          <div className="max-w-md mx-auto py-12 text-center">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-sand-100 text-sand-800 mb-3">
+              <Camera size={26} />
+            </div>
+            <h3 className="text-lg font-serif font-bold text-ink-950">
+              {items.length === 0 ? 'Your personal wardrobe is ready' : 'No items match filter'}
+            </h3>
+            <p className="text-xs text-ink-600 mt-1 max-w-sm mx-auto leading-relaxed">
+              {items.length === 0
+                ? 'Add your real clothing items! Take a quick photo with your phone or webcam, and our AI will automatically detect the category, color, and fabric.'
+                : 'Try adjusting your search query or selecting All Items.'}
+            </p>
+            <div className="mt-4 flex items-center justify-center gap-2">
+              <button
+                onClick={() => setShowAdd(true)}
+                className="flex items-center gap-1.5 rounded-xl bg-ink-950 px-5 py-2.5 text-xs font-semibold text-white shadow-sm hover:bg-ink-800"
+              >
+                <Camera size={14} className="text-sand-300" />
+                <span>Snap My First Item</span>
+              </button>
+              {items.length === 0 && (
+                <button
+                  onClick={handleRestoreSampleData}
+                  className="rounded-xl border border-ink-200 bg-white px-3.5 py-2.5 text-xs font-semibold text-ink-700 hover:bg-ink-50"
+                >
+                  Load Sample Closet
+                </button>
+              )}
+            </div>
+          </div>
         ) : (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
             {filtered.map((item) => (
@@ -316,11 +425,35 @@ function AddClothingModal({
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
+  const [isScanning, setIsScanning] = useState(false);
+  const [aiDetected, setAiDetected] = useState<GarmentAnalysisResult | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const handleFile = (f: File) => {
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const processImageFile = async (f: File) => {
     setFile(f);
-    setImageUrl(URL.createObjectURL(f));
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      const dataUrl = e.target?.result as string;
+      setImageUrl(dataUrl);
+      if (dataUrl) {
+        setIsScanning(true);
+        try {
+          const aiResult = await analyzeGarmentImage(dataUrl);
+          if (aiResult) {
+            setAiDetected(aiResult);
+            setName(aiResult.name);
+            setCategory(aiResult.category);
+            setColor(aiResult.color);
+            setFormality(aiResult.formality);
+          }
+        } finally {
+          setIsScanning(false);
+        }
+      }
+    };
+    reader.readAsDataURL(f);
   };
 
   const handleSave = async () => {
@@ -333,7 +466,11 @@ function AddClothingModal({
     try {
       let uploadedUrl: string | null = null;
       if (file && user) {
-        uploadedUrl = await uploadClothingImage(file, user.id);
+        try {
+          uploadedUrl = await uploadClothingImage(file, user.id);
+        } catch {
+          // If storage mock uses dataUrl fallback
+        }
       }
       await insertClothingItem({
         name: name.trim(),
@@ -342,81 +479,124 @@ function AddClothingModal({
         formality,
         image_url: uploadedUrl ?? imageUrl,
         status: 'clean',
+        wear_count: 0,
       });
       onAdded();
     } catch {
-      setError('Could not save. Please try again.');
+      setError('Could not save item. Please try again.');
     } finally {
       setSaving(false);
     }
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-ink-950/40 backdrop-blur-sm sm:items-center">
-      <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-t-3xl bg-ink-50 p-6 pb-8 animate-slide-up safe-bottom sm:rounded-3xl">
-        <div className="mb-5 flex items-center justify-between">
-          <h2 className="font-serif text-xl text-ink-900">Add to wardrobe</h2>
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-ink-950/50 backdrop-blur-sm sm:items-center p-3 animate-fade-in">
+      <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-3xl bg-white p-6 pb-8 shadow-2xl border border-ink-100 safe-bottom">
+        <div className="mb-4 flex items-center justify-between pb-3 border-b border-ink-100">
+          <div className="flex items-center gap-2">
+            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-ink-950 text-sand-300">
+              <Camera size={16} />
+            </div>
+            <div>
+              <h2 className="font-serif text-lg font-bold text-ink-950">Add Clothing to Wardrobe</h2>
+              <p className="text-2xs text-ink-500">Take or upload a photo to auto-detect fabric & category with AI</p>
+            </div>
+          </div>
           <button onClick={onClose} className="rounded-full p-1.5 text-ink-400 hover:bg-ink-100">
-            <X size={20} />
+            <X size={18} />
           </button>
         </div>
 
-        {/* Photo upload */}
+        {/* Photo upload / Camera */}
         <div className="mb-4">
           {imageUrl ? (
-            <div className="relative">
-              <img src={imageUrl} alt="Preview" className="h-48 w-full rounded-2xl object-cover" />
+            <div className="relative aspect-[4/3] w-full rounded-2xl overflow-hidden bg-ink-100 border border-ink-200">
+              <img src={imageUrl} alt="Garment Preview" className="h-full w-full object-cover" />
               <button
                 onClick={() => {
                   setImageUrl(null);
                   setFile(null);
+                  setAiDetected(null);
                 }}
-                className="absolute right-2 top-2 rounded-full bg-ink-900/70 p-1.5 text-white"
+                className="absolute right-2 top-2 rounded-full bg-ink-900/80 p-1.5 text-white hover:bg-ink-900"
+                title="Retake photo"
               >
-                <X size={16} />
+                <X size={15} />
               </button>
+
+              {isScanning && (
+                <div className="absolute inset-0 bg-ink-950/60 backdrop-blur-xs flex flex-col items-center justify-center text-white">
+                  <Sparkles size={24} className="text-sand-300 animate-spin mb-2" />
+                  <p className="text-xs font-semibold">AI Analyzing Garment Fabric & Cut...</p>
+                  <p className="text-3xs text-ink-300">Detecting category, color, and formality</p>
+                </div>
+              )}
             </div>
           ) : (
-            <label className="flex h-32 cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-ink-200 bg-white text-ink-400 transition-colors hover:border-ink-400 hover:text-ink-600">
-              <Camera size={24} />
-              <span className="mt-2 text-sm">Take or upload a photo</span>
-              <input
-                type="file"
-                accept="image/*"
-                capture="environment"
-                className="hidden"
-                onChange={(e) => {
-                  const f = e.target.files?.[0];
-                  if (f) handleFile(f);
-                }}
-              />
-            </label>
+            <div
+              onClick={() => fileInputRef.current?.click()}
+              className="flex h-36 cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-ink-200 bg-ink-50/50 hover:bg-ink-100/50 text-ink-500 transition-colors p-4 text-center"
+            >
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white shadow-xs text-ink-800 mb-2">
+                <Camera size={20} />
+              </div>
+              <span className="text-xs font-semibold text-ink-900">Take or Upload Garment Photo</span>
+              <span className="text-3xs text-ink-500 mt-0.5">Snap a hanger shot or flat lay of your clothes</span>
+            </div>
           )}
+
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) processImageFile(f);
+            }}
+          />
         </div>
 
+        {/* AI Detection Banner */}
+        {aiDetected && (
+          <div className="mb-4 rounded-xl bg-sand-50 border border-sand-200 p-2.5 flex items-start gap-2 text-2xs text-sand-900">
+            <Sparkles size={14} className="text-sand-600 mt-0.5 shrink-0" />
+            <div>
+              <span className="font-semibold">AI Autodetected:</span> {aiDetected.material ? `${aiDetected.material} • ` : ''}
+              {aiDetected.stylingNote || 'Form fields pre-filled from your image.'}
+            </div>
+          </div>
+        )}
+
         {/* Name */}
-        <div className="mb-4">
-          <label className="mb-1.5 block text-sm font-medium text-ink-700">Item name</label>
+        <div className="mb-3">
+          <label className="mb-1 block text-2xs font-bold uppercase tracking-wider text-ink-600">
+            Garment Name
+          </label>
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="e.g. Navy linen shirt"
-            className="w-full rounded-2xl border border-ink-200 bg-white px-4 py-3 text-sm text-ink-900 outline-none placeholder:text-ink-300 focus:border-ink-400"
+            placeholder="e.g. Vintage Wash Denim Jacket, White Poplin Shirt..."
+            className="w-full rounded-xl border border-ink-200 bg-white px-3.5 py-2.5 text-xs sm:text-sm text-ink-900 outline-none focus:border-ink-900 focus:ring-1 focus:ring-ink-900"
           />
         </div>
 
         {/* Category */}
-        <div className="mb-4">
-          <label className="mb-1.5 block text-sm font-medium text-ink-700">Category</label>
-          <div className="flex flex-wrap gap-2">
+        <div className="mb-3">
+          <label className="mb-1 block text-2xs font-bold uppercase tracking-wider text-ink-600">
+            Category
+          </label>
+          <div className="flex flex-wrap gap-1.5">
             {CATEGORIES.map((cat) => (
               <button
                 key={cat}
+                type="button"
                 onClick={() => setCategory(cat)}
-                className={`rounded-full border px-3.5 py-1.5 text-sm transition-all ${
+                className={`rounded-xl border px-3 py-1.5 text-xs font-medium transition-all ${
                   category === cat
-                    ? 'border-ink-900 bg-ink-900 text-ink-50'
-                    : 'border-ink-200 bg-white text-ink-600'
+                    ? 'border-ink-950 bg-ink-950 text-white font-semibold shadow-xs'
+                    : 'border-ink-200 bg-white text-ink-600 hover:bg-ink-100'
                 }`}
               >
                 {categoryLabel(cat)}
@@ -425,43 +605,46 @@ function AddClothingModal({
           </div>
         </div>
 
-        {/* Color */}
-        <div className="mb-4">
-          <label className="mb-1.5 block text-sm font-medium text-ink-700">Colour (optional)</label>
-          <input
-            value={color}
-            onChange={(e) => setColor(e.target.value)}
-            placeholder="e.g. navy, white, olive"
-            className="w-full rounded-2xl border border-ink-200 bg-white px-4 py-3 text-sm text-ink-900 outline-none placeholder:text-ink-300 focus:border-ink-400"
-          />
-        </div>
+        {/* Color & Formality in 2 cols */}
+        <div className="grid grid-cols-2 gap-3 mb-4">
+          <div>
+            <label className="mb-1 block text-2xs font-bold uppercase tracking-wider text-ink-600">
+              Color
+            </label>
+            <input
+              value={color}
+              onChange={(e) => setColor(e.target.value)}
+              placeholder="e.g. Navy, Off-white, Olive"
+              className="w-full rounded-xl border border-ink-200 bg-white px-3.5 py-2 text-xs text-ink-900 outline-none focus:border-ink-900"
+            />
+          </div>
 
-        {/* Formality */}
-        <div className="mb-6">
-          <label className="mb-1.5 block text-sm font-medium text-ink-700">Formality</label>
-          <div className="flex gap-2">
-            {(['casual', 'smart casual', 'formal'] as Formality[]).map((f) => (
-              <button
-                key={f}
-                onClick={() => setFormality(f)}
-                className={`rounded-full border px-3.5 py-1.5 text-sm capitalize transition-all ${
-                  formality === f
-                    ? 'border-ink-900 bg-ink-900 text-ink-50'
-                    : 'border-ink-200 bg-white text-ink-600'
-                }`}
-              >
-                {f}
-              </button>
-            ))}
+          <div>
+            <label className="mb-1 block text-2xs font-bold uppercase tracking-wider text-ink-600">
+              Formality
+            </label>
+            <select
+              value={formality}
+              onChange={(e) => setFormality(e.target.value as Formality)}
+              className="w-full rounded-xl border border-ink-200 bg-white px-3 py-2 text-xs text-ink-900 outline-none focus:border-ink-900"
+            >
+              <option value="casual">Casual</option>
+              <option value="smart casual">Smart Casual</option>
+              <option value="formal">Formal</option>
+            </select>
           </div>
         </div>
 
         {error && (
-          <p className="mb-3 rounded-xl bg-red-50 px-4 py-2.5 text-sm text-red-600">{error}</p>
+          <p className="mb-3 rounded-xl bg-red-50 p-2 text-2xs font-medium text-red-600">{error}</p>
         )}
 
-        <Button fullWidth size="lg" onClick={handleSave} disabled={saving}>
-          {saving ? <Spinner size="sm" className="border-ink-200 border-t-ink-50" /> : 'Add to wardrobe'}
+        <Button fullWidth size="lg" onClick={handleSave} disabled={saving || isScanning}>
+          {saving ? (
+            <Spinner size="sm" className="border-ink-200 border-t-ink-50" />
+          ) : (
+            'Add to My Wardrobe'
+          )}
         </Button>
       </div>
     </div>

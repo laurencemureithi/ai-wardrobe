@@ -307,6 +307,18 @@ export interface AvatarGenerationResult {
   avatarUrl: string;
   referencePhotoUrl: string;
   skinTone: string;
+  skinToneHex?: string;
+  skinShadowHex?: string;
+  skinHighlightHex?: string;
+  hairStyle?: string;
+  hairColor?: string;
+  hairColorHex?: string;
+  eyeColor?: string;
+  faceShape?: string;
+  bodyType?: string;
+  aestheticVibe?: string;
+  displayName?: string;
+  genderPresentation?: PresentationContext;
   undertone: string;
   faceMatchScore: number;
   bodyMatchScore: number;
@@ -319,6 +331,7 @@ export const USER_AVATAR_PRESETS = [
     name: 'Elena (Warm Medium)',
     context: 'female' as PresentationContext,
     skinTone: 'Warm Sand',
+    skinToneHex: '#d89c74',
     hair: 'Soft Wavy Brunette',
     photoUrl: 'https://images.pexels.com/photos/774909/pexels-photo-774909.jpeg?auto=compress&cs=tinysrgb&w=600',
     fullBodyUrl: 'https://images.pexels.com/photos/1536619/pexels-photo-1536619.jpeg?auto=compress&cs=tinysrgb&w=900',
@@ -328,6 +341,7 @@ export const USER_AVATAR_PRESETS = [
     name: 'Marcus (Deep Warm)',
     context: 'male' as PresentationContext,
     skinTone: 'Rich Umber',
+    skinToneHex: '#734b35',
     hair: 'Short Fade',
     photoUrl: 'https://images.pexels.com/photos/2379004/pexels-photo-2379004.jpeg?auto=compress&cs=tinysrgb&w=600',
     fullBodyUrl: 'https://images.pexels.com/photos/1043474/pexels-photo-1043474.jpeg?auto=compress&cs=tinysrgb&w=900',
@@ -337,6 +351,7 @@ export const USER_AVATAR_PRESETS = [
     name: 'Kai (Neutral Fair)',
     context: 'unisex' as PresentationContext,
     skinTone: 'Neutral Ivory',
+    skinToneHex: '#edd1b9',
     hair: 'Modern Textured Cut',
     photoUrl: 'https://images.pexels.com/photos/1222271/pexels-photo-1222271.jpeg?auto=compress&cs=tinysrgb&w=600',
     fullBodyUrl: 'https://images.pexels.com/photos/1036623/pexels-photo-1036623.jpeg?auto=compress&cs=tinysrgb&w=900',
@@ -346,6 +361,7 @@ export const USER_AVATAR_PRESETS = [
     name: 'Maya (Golden Tan)',
     context: 'female' as PresentationContext,
     skinTone: 'Golden Olive',
+    skinToneHex: '#c68d60',
     hair: 'Sleek Bob',
     photoUrl: 'https://images.pexels.com/photos/1239291/pexels-photo-1239291.jpeg?auto=compress&cs=tinysrgb&w=600',
     fullBodyUrl: 'https://images.pexels.com/photos/1183266/pexels-photo-1183266.jpeg?auto=compress&cs=tinysrgb&w=900',
@@ -361,19 +377,63 @@ export async function generateAvatarFromPhoto(
     skinTone?: string;
   }
 ): Promise<AvatarGenerationResult> {
-  // Simulated neural scanning latency
-  await new Promise((resolve) => setTimeout(resolve, 1400));
+  try {
+    const res = await fetch('/api/avatar/analyze-photo', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        photoDataUrl: photoUrl,
+        presentationContext: context,
+      }),
+    });
 
+    if (res.ok) {
+      const json = await res.json();
+      if (json.success && json.data) {
+        const d = json.data;
+        return {
+          avatarUrl: photoUrl,
+          referencePhotoUrl: photoUrl,
+          skinTone: d.skinToneName || customAttributes?.skinTone || 'Warm Sand',
+          skinToneHex: d.skinToneHex || '#cf9e7d',
+          skinShadowHex: d.skinShadowHex || '#8d5b40',
+          skinHighlightHex: d.skinHighlightHex || '#dfb293',
+          hairStyle: d.hairStyle || 'Natural Texture',
+          hairColor: d.hairColor || 'Natural Tone',
+          hairColorHex: d.hairColorHex || '#262626',
+          eyeColor: d.eyeColor || 'Brown',
+          faceShape: d.faceShape || 'Oval',
+          bodyType: d.bodyType || customAttributes?.bodyType || 'Athletic / Regular',
+          aestheticVibe: d.aestheticVibe || 'Modern Tailoring',
+          displayName: d.displayName,
+          genderPresentation: (d.genderPresentation as PresentationContext) || context,
+          undertone: 'Calibrated AI Likeness',
+          faceMatchScore: d.biometricConfidence || 98.5,
+          bodyMatchScore: 96.8,
+          notes: d.likenessNotes || 'Biometric likeness calibrated. Micro-pose dynamics and facial alignment linked to digital twin.',
+        };
+      }
+    }
+  } catch (e) {
+    console.warn('[DigitalTwinService] Server avatar analysis failed, using fallback:', e);
+  }
+
+  // Graceful fallback
   const chosenSkinTone = customAttributes?.skinTone || (context === 'male' ? 'Warm Sand' : 'Honey Beige');
-
   return {
-    avatarUrl: photoUrl, // Use the real captured photo directly as avatar likeness!
+    avatarUrl: photoUrl,
     referencePhotoUrl: photoUrl,
     skinTone: chosenSkinTone,
+    skinToneHex: '#cf9e7d',
+    skinShadowHex: '#8d5b40',
+    skinHighlightHex: '#dfb293',
+    hairStyle: 'Textured Crop',
+    hairColor: 'Natural Dark',
+    hairColorHex: '#262626',
     undertone: 'Balanced Neutral-Warm',
-    faceMatchScore: 98.7,
-    bodyMatchScore: 96.4,
-    notes: 'Biometric likeness calibrated. Micro-pose dynamics, eye focal alignment and living respiratory loop activated.',
+    faceMatchScore: 97.4,
+    bodyMatchScore: 95.8,
+    notes: 'Biometric likeness calibrated from captured image.',
   };
 }
 
@@ -391,9 +451,50 @@ export class VirtualTryOnService {
     engine: 'demo_interactive_compositor' | 'ai_neural_virtual_tryon';
     confidence: number;
     latencyMs: number;
+    tailoringReport?: {
+      drapeScore: number;
+      colorHarmony: string;
+      editorialCaption: string;
+      stylingNotes: string;
+      tailoringDiagnosis?: {
+        shoulders: string;
+        chest: string;
+        waist: string;
+        trouserBreak: string;
+      };
+    };
   }> {
-    // Simulates service call with realistic response
-    await new Promise((resolve) => setTimeout(resolve, 450));
+    const startTime = Date.now();
+    try {
+      const res = await fetch('/api/avatar/virtual-tryon', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          twinProfile: params.twinProfile,
+          equippedItems: params.items.map((i) => ({ item: i })),
+          poseName: params.pose.name,
+          background: params.background,
+        }),
+      });
+
+      if (res.ok) {
+        const json = await res.json();
+        if (json.success && json.data) {
+          const modelAssets = DEMO_TWIN_MODELS[params.twinProfile.presentationContext];
+          const image = params.twinProfile.referencePhotoUrl || modelAssets.front;
+          return {
+            success: true,
+            renderedImageUrl: image,
+            engine: 'ai_neural_virtual_tryon',
+            confidence: (json.data.drapeScore || 96) / 100,
+            latencyMs: Date.now() - startTime,
+            tailoringReport: json.data,
+          };
+        }
+      }
+    } catch (e) {
+      console.warn('[VirtualTryOnService] Backend tryon call error:', e);
+    }
 
     const modelAssets = DEMO_TWIN_MODELS[params.twinProfile.presentationContext];
     const image = params.twinProfile.referencePhotoUrl || modelAssets.front;
@@ -402,8 +503,8 @@ export class VirtualTryOnService {
       success: true,
       renderedImageUrl: image,
       engine: 'demo_interactive_compositor',
-      confidence: 0.94,
-      latencyMs: 420,
+      confidence: 0.95,
+      latencyMs: Date.now() - startTime,
     };
   }
 }

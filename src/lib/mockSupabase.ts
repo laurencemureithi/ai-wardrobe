@@ -309,6 +309,35 @@ class MockQueryBuilder {
   }
 }
 
+export function clearAllItems(): void {
+  const db = loadDB();
+  db.clothing_items = [];
+  db.outfits = [];
+  db.outfit_items = [];
+  db.wear_events = [];
+  saveDB(db);
+}
+
+export function restoreSampleItems(): void {
+  const db = loadDB();
+  const session = loadSession();
+  const userId = session?.user?.id || 'demo-user-123';
+  const now = new Date().toISOString();
+  db.clothing_items = DEMO_ITEMS.map((item, index) => ({
+    ...item,
+    id: `item-${index + 1}`,
+    user_id: userId,
+    created_at: new Date(Date.now() - (index + 1) * 3600000).toISOString(),
+    updated_at: now,
+  }));
+  saveDB(db);
+}
+
+export function hasSampleItems(): boolean {
+  const db = loadDB();
+  return db.clothing_items.some((i) => i.id.startsWith('item-'));
+}
+
 export function createMockSupabase() {
   return {
     auth: {
